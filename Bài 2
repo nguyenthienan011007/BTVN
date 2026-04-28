@@ -1,0 +1,115 @@
+
+import numpy as np
+import skfuzzy as fuzz
+from skfuzzy import control as ctrl
+khoiluong = ctrl.Antecedent(np.arange(0, 11, 1), 'khoiluong')
+doban= ctrl.Antecedent(np.arange(0, 101, 1), 'doban')
+loaivai= ctrl.Antecedent(np.arange(0, 101, 1), 'loaivai')
+thoigiangiat = ctrl.Consequent(np.arange(0, 61, 1), 'thoigiangiat')
+mucnuoc= ctrl.Consequent(np.arange(0, 101, 1), 'mucnuoc')
+khoiluong['Nhẹ']= fuzz.trimf(khoiluong.universe, [0, 0, 4])
+khoiluong['Trung bình'] = fuzz.trimf(khoiluong.universe, [3, 5, 7])
+khoiluong['Nặng']= fuzz.trimf(khoiluong.universe, [6, 10, 10])
+doban['Thấp']= fuzz.trimf(doban.universe, [0, 0, 40])
+doban['Trung bình'] = fuzz.trimf(doban.universe, [30, 50, 70])
+doban['Cao'] = fuzz.trimf(doban.universe, [60, 100, 100])
+loaivai['Mềm']= fuzz.trimf(loaivai.universe, [0, 0, 40])
+loaivai['Trung bình'] = fuzz.trimf(loaivai.universe, [30, 50, 70])
+loaivai['Dày']= fuzz.trimf(loaivai.universe, [60, 100, 100])
+thoigiangiat['Ngắn']= fuzz.trimf(thoigiangiat.universe, [0, 0, 25])
+thoigiangiat['Trung bình'] = fuzz.trimf(thoigiangiat.universe, [20, 35, 50])
+thoigiangiat['Dài']= fuzz.trimf(thoigiangiat.universe, [45, 60, 60])
+mucnuoc['Thấp']= fuzz.trimf(mucnuoc.universe, [0, 0, 40])
+mucnuoc['Trung bình'] = fuzz.trimf(mucnuoc.universe, [30, 50, 70])
+mucnuoc['Cao']= fuzz.trimf(mucnuoc.universe, [60, 100, 100])
+
+rule1a  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Thấp'] & loaivai['Mềm'],thoigiangiat['Ngắn'])
+rule1b  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Thấp'] & loaivai['Mềm'],mucnuoc['Thấp'])
+rule2a  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Thấp'] & loaivai['Trung bình'],thoigiangiat['Trung bình'])
+rule2b  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Thấp'] & loaivai['Trung bình'],mucnuoc['Thấp'])
+rule3a  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Thấp'] & loaivai['Dày'],thoigiangiat['Dài'])
+rule3b  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Thấp'] & loaivai['Dày'],mucnuoc['Trung bình'])
+
+rule4a  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Trung bình'] & loaivai['Mềm'],thoigiangiat['Ngắn'])
+rule4b  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Trung bình'] & loaivai['Mềm'],mucnuoc['Trung bình'])
+rule5a  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Trung bình'] & loaivai['Trung bình'],thoigiangiat['Trung bình'])
+rule5b  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Trung bình'] & loaivai['Trung bình'],mucnuoc['Trung bình'])
+rule6a  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Trung bình'] & loaivai['Dày'],thoigiangiat['Trung bình'])
+rule6b  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Trung bình'] & loaivai['Dày'],mucnuoc['Trung bình'])
+
+rule7a  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Cao'] & loaivai['Mềm'],thoigiangiat['Trung bình'])
+rule7b  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Cao'] & loaivai['Mềm'],mucnuoc['Trung bình'])
+rule8a  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Cao'] & loaivai['Trung bình'],thoigiangiat['Trung bình'])
+rule8b  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Cao'] & loaivai['Trung bình'],mucnuoc['Cao'])
+rule9a  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Cao'] & loaivai['Dày'],thoigiangiat['Dài'])
+rule9b  = ctrl.Rule(khoiluong['Nhẹ'] & doban['Cao'] & loaivai['Dày'],mucnuoc['Cao'])
+
+rule10a = ctrl.Rule(khoiluong['Trung bình'] & doban['Thấp'] & loaivai['Mềm'],thoigiangiat['Trung bình'])
+rule10b = ctrl.Rule(khoiluong['Trung bình'] & doban['Thấp'] & loaivai['Mềm'],mucnuoc['Trung bình'])
+rule11a = ctrl.Rule(khoiluong['Trung bình'] & doban['Thấp'] & loaivai['Trung bình'], thoigiangiat['Trung bình'])
+rule11b = ctrl.Rule(khoiluong['Trung bình'] & doban['Thấp'] & loaivai['Trung bình'], mucnuoc['Trung bình'])
+rule12a = ctrl.Rule(khoiluong['Trung bình'] & doban['Thấp'] & loaivai['Dày'],thoigiangiat['Dài'])
+rule12b = ctrl.Rule(khoiluong['Trung bình'] & doban['Thấp'] & loaivai['Dày'],mucnuoc['Trung bình'])
+
+rule13a = ctrl.Rule(khoiluong['Trung bình'] & doban['Trung bình'] & loaivai['Mềm'],thoigiangiat['Trung bình'])
+rule13b = ctrl.Rule(khoiluong['Trung bình'] & doban['Trung bình'] & loaivai['Mềm'],mucnuoc['Trung bình'])
+rule14a = ctrl.Rule(khoiluong['Trung bình'] & doban['Trung bình'] & loaivai['Trung bình'],thoigiangiat['Dài'])
+rule14b = ctrl.Rule(khoiluong['Trung bình'] & doban['Trung bình'] & loaivai['Trung bình'],mucnuoc['Trung bình'])
+rule15a = ctrl.Rule(khoiluong['Trung bình'] & doban['Trung bình'] & loaivai['Dày'],thoigiangiat['Dài'])
+rule15b = ctrl.Rule(khoiluong['Trung bình'] & doban['Trung bình'] & loaivai['Dày'],mucnuoc['Cao'])
+
+rule16a = ctrl.Rule(khoiluong['Trung bình'] & doban['Cao'] & loaivai['Mềm'],thoigiangiat['Dài'])
+rule16b = ctrl.Rule(khoiluong['Trung bình'] & doban['Cao'] & loaivai['Mềm'],mucnuoc['Trung bình'])
+rule17a = ctrl.Rule(khoiluong['Trung bình'] & doban['Cao'] & loaivai['Trung bình'],thoigiangiat['Dài'])
+rule17b = ctrl.Rule(khoiluong['Trung bình'] & doban['Cao'] & loaivai['Trung bình'],mucnuoc['Cao'])
+rule18a = ctrl.Rule(khoiluong['Trung bình'] & doban['Cao'] & loaivai['Dày'],thoigiangiat['Dài'])
+rule18b = ctrl.Rule(khoiluong['Trung bình'] & doban['Cao'] & loaivai['Dày'],mucnuoc['Cao'])
+
+rule19a = ctrl.Rule(khoiluong['Nặng'] & doban['Thấp'] & loaivai['Mềm'],thoigiangiat['Dài'])
+rule19b = ctrl.Rule(khoiluong['Nặng'] & doban['Thấp'] & loaivai['Mềm'],mucnuoc['Trung bình'])
+rule20a = ctrl.Rule(khoiluong['Nặng'] & doban['Thấp'] & loaivai['Trung bình'],thoigiangiat['Dài'])
+rule20b = ctrl.Rule(khoiluong['Nặng'] & doban['Thấp'] & loaivai['Trung bình'],mucnuoc['Trung bình'])
+rule21a = ctrl.Rule(khoiluong['Nặng'] & doban['Thấp'] & loaivai['Dày'],thoigiangiat['Dài'])
+rule21b = ctrl.Rule(khoiluong['Nặng'] & doban['Thấp'] & loaivai['Dày'],mucnuoc['Cao'])
+
+rule22a = ctrl.Rule(khoiluong['Nặng'] & doban['Trung bình'] & loaivai['Mềm'],thoigiangiat['Dài'])
+rule22b = ctrl.Rule(khoiluong['Nặng'] & doban['Trung bình'] & loaivai['Mềm'],mucnuoc['Trung bình'])
+rule23a = ctrl.Rule(khoiluong['Nặng'] & doban['Trung bình'] & loaivai['Trung bình'],thoigiangiat['Dài'])
+rule23b = ctrl.Rule(khoiluong['Nặng'] & doban['Trung bình'] & loaivai['Trung bình'],mucnuoc['Cao'])
+rule24a = ctrl.Rule(khoiluong['Nặng'] & doban['Trung bình'] & loaivai['Dày'],thoigiangiat['Dài'])
+rule24b = ctrl.Rule(khoiluong['Nặng'] & doban['Trung bình'] & loaivai['Dày'],mucnuoc['Cao'])
+
+rule25a = ctrl.Rule(khoiluong['Nặng'] & doban['Cao'] & loaivai['Mềm'],thoigiangiat['Dài'])
+rule25b = ctrl.Rule(khoiluong['Nặng'] & doban['Cao'] & loaivai['Mềm'],mucnuoc['Cao'])
+rule26a = ctrl.Rule(khoiluong['Nặng'] & doban['Cao'] & loaivai['Trung bình'],thoigiangiat['Dài'])
+rule26b = ctrl.Rule(khoiluong['Nặng'] & doban['Cao'] & loaivai['Trung bình'],mucnuoc['Cao'])
+rule27a = ctrl.Rule(khoiluong['Nặng'] & doban['Cao'] & loaivai['Dày'],thoigiangiat['Dài'])
+rule27b = ctrl.Rule(khoiluong['Nặng'] & doban['Cao'] & loaivai['Dày'],mucnuoc['Cao'])
+
+rules = [
+    rule1a,  rule1b,  rule2a,  rule2b,  rule3a,  rule3b,
+    rule4a,  rule4b,  rule5a,  rule5b,  rule6a,  rule6b,
+    rule7a,  rule7b,  rule8a,  rule8b,  rule9a,  rule9b,
+    rule10a, rule10b, rule11a, rule11b, rule12a, rule12b,
+    rule13a, rule13b, rule14a, rule14b, rule15a, rule15b,
+    rule16a, rule16b, rule17a, rule17b, rule18a, rule18b,
+    rule19a, rule19b, rule20a, rule20b, rule21a, rule21b,
+    rule22a, rule22b, rule23a, rule23b, rule24a, rule24b,
+    rule25a, rule25b, rule26a, rule26b, rule27a, rule27b,
+]
+
+washing_ctrl=ctrl.ControlSystem(rules)
+washing_simulation=ctrl.ControlSystemSimulation(washing_ctrl)
+
+
+washing_simulation.input['khoiluong']= 7.5  # kg
+washing_simulation.input['doban']= 60   # %
+washing_simulation.input['loaivai']= 80   # (80 ~ Dày)
+washing_simulation.compute()
+
+print(f"Thời gian giặt:{washing_simulation.output['thoigiangiat']:.2f} phút")
+print(f"Mực nước:{washing_simulation.output['mucnuoc']:.2f} lít")
+
+
+thoigiangiat.view(sim=washing_simulation)
+mucnuoc.view(sim=washing_simulation)
