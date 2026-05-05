@@ -1,0 +1,26 @@
+!pip install streamlit scikit-learn numpy -q
+!wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
+!chmod +x cloudflared
+import subprocess, threading, re, time
+
+threading.Thread(target=lambda: subprocess.run(
+    ["streamlit", "run", "grabbike_streamlit.py",
+     "--server.port=8501", "--server.headless=true"]
+), daemon=True).start()
+
+time.sleep(8)  # ← tăng lên 8
+
+proc = subprocess.Popen(["./cloudflared","tunnel","--url","http://localhost:8501"],
+    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+# Thêm timeout 30 giây, tránh treo mãi
+import time as _t
+start = _t.time()
+for line in proc.stdout:
+    if _t.time() - start > 30:
+        print("❌ Timeout - thử chạy lại cell này")
+        break
+    m = re.search(r"https://[\w-]+\.trycloudflare\.com", line.decode())
+    if m:
+        print("🌐 Truy cập:", m.group(0))
+        break
