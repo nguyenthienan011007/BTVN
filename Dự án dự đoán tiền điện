@@ -1,0 +1,738 @@
+"""
+App Dự Đoán Tiền Điện - Nước Phòng Trọ TP.HCM
+Chạy: streamlit run app_tien_dien.py
+Cài:  pip install streamlit scikit-learn pandas openpyxl plotly
+"""
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error, r2_score
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import time, warnings
+warnings.filterwarnings("ignore")
+
+# ─────────────────────────────────────────────────────────────
+# DỮ LIỆU TRƯỜNG ĐẠI HỌC
+# ─────────────────────────────────────────────────────────────
+TRUONG = {
+    # UEH 3 cơ sở — đặt đầu để mặc định chọn Cơ sở C
+    "UEH – Cơ sở C (17 Phạm Ngọc Thạch, Q.3)":
+        {"quan":"Quận 3","lat":10.7869,"lon":106.6990,"he_so":1.15,
+         "gia_tb":"1.0–1.4 triệu"},
+    "UEH – Cơ sở A (59C Nguyễn Đình Chiểu, Q.3)":
+        {"quan":"Quận 3","lat":10.7751,"lon":106.6821,"he_so":1.15,
+         "gia_tb":"1.0–1.4 triệu"},
+    "UEH – Cơ sở B (279 Nguyễn Tri Phương, Q.10)":
+        {"quan":"Quận 10","lat":10.7680,"lon":106.6673,"he_so":1.12,
+         "gia_tb":"0.85–1.25 triệu"},
+    "ĐH Luật TP.HCM (Q.1)":
+        {"quan":"Quận 1","lat":10.7769,"lon":106.6953,"he_so":1.18,"gia_tb":"1.1–1.5 triệu"},
+    "ĐH Y Dược TP.HCM (Q.5)":
+        {"quan":"Quận 5","lat":10.7540,"lon":106.6619,"he_so":1.14,"gia_tb":"0.9–1.3 triệu"},
+    "ĐH Sư phạm TP.HCM (Q.5)":
+        {"quan":"Quận 5","lat":10.7627,"lon":106.6823,"he_so":1.13,"gia_tb":"0.9–1.3 triệu"},
+    "ĐH Bách Khoa TP.HCM (Q.10)":
+        {"quan":"Quận 10","lat":10.7726,"lon":106.6577,"he_so":1.12,"gia_tb":"0.85–1.25 triệu"},
+    "ĐH KHTN – ĐHQG (Q.10)":
+        {"quan":"Quận 10","lat":10.7626,"lon":106.6605,"he_so":1.12,"gia_tb":"0.85–1.25 triệu"},
+    "ĐH KHXH & NV (Q.10)":
+        {"quan":"Quận 10","lat":10.7625,"lon":106.6606,"he_so":1.12,"gia_tb":"0.85–1.25 triệu"},
+    "ĐH RMIT Việt Nam (Q.7)":
+        {"quan":"Quận 7","lat":10.7291,"lon":106.7224,"he_so":1.16,"gia_tb":"1.0–1.6 triệu"},
+    "ĐH Tôn Đức Thắng (Q.7)":
+        {"quan":"Quận 7","lat":10.7323,"lon":106.7182,"he_so":1.14,"gia_tb":"0.9–1.4 triệu"},
+    "ĐH Văn Lang (Bình Thạnh)":
+        {"quan":"Bình Thạnh","lat":10.8141,"lon":106.7127,"he_so":1.08,"gia_tb":"0.8–1.2 triệu"},
+    "ĐH GTVT CS2 (Bình Thạnh)":
+        {"quan":"Bình Thạnh","lat":10.8050,"lon":106.7098,"he_so":1.07,"gia_tb":"0.75–1.15 triệu"},
+    "ĐH HUTECH (Gò Vấp)":
+        {"quan":"Gò Vấp","lat":10.8380,"lon":106.6650,"he_so":1.05,"gia_tb":"0.7–1.1 triệu"},
+    "ĐH Công nghiệp (Tân Bình)":
+        {"quan":"Tân Bình","lat":10.8017,"lon":106.6629,"he_so":1.06,"gia_tb":"0.75–1.15 triệu"},
+    "ĐH Sư phạm Kỹ thuật (Tân Phú)":
+        {"quan":"Tân Phú","lat":10.8503,"lon":106.6718,"he_so":1.03,"gia_tb":"0.65–1.05 triệu"},
+    "ĐHQG – Làng ĐH Linh Trung (Thủ Đức)":
+        {"quan":"TP. Thủ Đức","lat":10.8706,"lon":106.8022,"he_so":1.00,"gia_tb":"0.55–0.95 triệu"},
+    "ĐH Bách Khoa – ĐHQG (Thủ Đức)":
+        {"quan":"TP. Thủ Đức","lat":10.8800,"lon":106.8052,"he_so":1.00,"gia_tb":"0.55–0.95 triệu"},
+    "ĐH FPT TP.HCM (Thủ Đức)":
+        {"quan":"TP. Thủ Đức","lat":10.8411,"lon":106.8098,"he_so":1.02,"gia_tb":"0.6–1.0 triệu"},
+    "ĐH Tôn Đức Thắng CS2 (Thủ Đức)":
+        {"quan":"TP. Thủ Đức","lat":10.8315,"lon":106.8021,"he_so":1.01,"gia_tb":"0.6–1.0 triệu"},
+    "ĐH Quốc tế Miền Đông (Bình Dương)":
+        {"quan":"Bình Dương","lat":10.9667,"lon":106.8370,"he_so":0.90,"gia_tb":"0.45–0.85 triệu"},
+}
+
+DANH_SACH_QUAN = sorted(set(v["quan"] for v in TRUONG.values()))
+
+# ─────────────────────────────────────────────────────────────
+# CẤU HÌNH TRANG
+# ─────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Dự Đoán Tiền Điện – Nước | TP.HCM",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ─────────────────────────────────────────────────────────────
+# CSS — NỀN TRẮNG, CHỮ TỐI, ĐƠN GIẢN
+# ─────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap');
+
+/* Nền toàn trang */
+html, body, [class*="css"], .stApp {
+    font-family: 'Be Vietnam Pro', sans-serif;
+    background-color: #ffffff;
+    color: #111827;
+}
+.block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background-color: #f9fafb;
+    border-right: 1px solid #e5e7eb;
+}
+
+/* Header */
+.app-header {
+    background: #1d4ed8;
+    border-radius: 12px;
+    padding: 1.4rem 2rem;
+    margin-bottom: 1.5rem;
+}
+.app-header h1 { color: #fff; font-size: 1.7rem; font-weight: 700; margin: 0; }
+.app-header p  { color: #bfdbfe; font-size: 0.88rem; margin: 0.3rem 0 0; }
+
+/* Thẻ KPI */
+.kpi {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 0.9rem 1rem;
+    text-align: center;
+}
+.kpi-v { font-size: 1.5rem; font-weight: 700; color: #1d4ed8; }
+.kpi-l { font-size: 0.78rem; color: #6b7280; margin-top: 0.2rem; }
+
+/* Thẻ kết quả */
+.res-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-top: 4px solid #1d4ed8;
+    border-radius: 10px;
+    padding: 1.3rem 1.5rem;
+    text-align: center;
+}
+.res-card.nuoc { border-top-color: #0284c7; }
+.res-card.tong { border-top-color: #7c3aed; }
+.res-lbl   { font-size: 0.82rem; color: #6b7280; margin-bottom: 0.3rem; }
+.res-val   { font-size: 2.4rem; font-weight: 700; color: #1d4ed8; line-height: 1.1; }
+.res-val.nuoc { color: #0284c7; }
+.res-val.tong { color: #7c3aed; }
+.res-sub   { font-size: 0.8rem;  color: #9ca3af; margin-top: 0.25rem; }
+.res-range {
+    font-size: 0.78rem; color: #3b82f6;
+    background: #eff6ff; border-radius: 6px;
+    padding: 0.35rem 0.6rem; margin-top: 0.5rem;
+}
+
+/* Thẻ khu vực */
+.area-box {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin: 0.5rem 0 0.8rem;
+    font-size: 0.85rem;
+    color: #1e40af;
+}
+.area-box b { color: #1d4ed8; }
+
+/* Gợi ý */
+.tip  { background:#f0fdf4; border-left:3px solid #16a34a;
+        border-radius:6px; padding:0.6rem 0.9rem;
+        margin:0.3rem 0; font-size:0.85rem; color:#15803d; }
+.warn { background:#fff7ed; border-left:3px solid #ea580c;
+        border-radius:6px; padding:0.6rem 0.9rem;
+        margin:0.3rem 0; font-size:0.85rem; color:#9a3412; }
+
+/* Tiêu đề section */
+.sec { font-size:1rem; font-weight:700; color:#111827;
+       border-bottom:2px solid #e5e7eb;
+       padding-bottom:0.35rem; margin:1.2rem 0 0.8rem; }
+
+/* Nút */
+.stButton > button {
+    background: #1d4ed8 !important; color: #fff !important;
+    border: none !important; border-radius: 8px !important;
+    font-weight: 600 !important; font-size: 0.95rem !important;
+    box-shadow: 0 1px 4px rgba(29,78,216,0.25) !important;
+}
+.stButton > button:hover { background: #1e40af !important; }
+
+/* Ẩn footer */
+#MainMenu, footer { visibility: hidden; }
+</style>
+""", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────
+# HÀM TIỆN ÍCH
+# ─────────────────────────────────────────────────────────────
+def chart_layout(fig, title="", height=360):
+    """Áp layout đồng nhất: nền trắng, lưới nhạt, ít chữ, không tooltip."""
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=13, color="#374151"), x=0),
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        font=dict(family="Be Vietnam Pro", color="#374151", size=11),
+        height=height,
+        margin=dict(l=10, r=10, t=40, b=10),
+        showlegend=True,
+        legend=dict(
+            orientation="h", y=-0.18,
+            font=dict(size=10), bgcolor="rgba(0,0,0,0)"
+        ),
+        xaxis=dict(showgrid=False, linecolor="#e5e7eb",
+                   tickfont=dict(size=10, color="#6b7280")),
+        yaxis=dict(gridcolor="#f3f4f6", linecolor="#e5e7eb",
+                   tickfont=dict(size=10, color="#6b7280")),
+        # Tắt hoàn toàn hộp tooltip khi di chuột
+        hovermode=False,
+    )
+    return fig
+
+
+# ─────────────────────────────────────────────────────────────
+# LOAD & TRAIN
+# ─────────────────────────────────────────────────────────────
+@st.cache_resource
+def load_and_train():
+    try:
+        df = pd.read_excel("DuLieu_DuDoanTienDien_PhongTro.xlsx")
+    except FileNotFoundError:
+        np.random.seed(42); n = 300
+        loai = ["PhongTro","ChungCuMini","NhaNguyenCan","KTX"]
+        df = pd.DataFrame({
+            "SoNguoiO":            np.random.randint(1, 7, n),
+            "SoMayLanh":           np.random.randint(0, 3, n),
+            "SoQuat":              np.random.randint(1, 6, n),
+            "CoTuLanh":            np.random.randint(0, 2, n),
+            "SoGioMayLanhMoiNgay": np.round(np.random.uniform(0, 14, n), 1),
+            "DienTichPhong_m2":    np.random.randint(10, 50, n),
+            "TangLau":             np.random.randint(1, 9, n),
+            "LoaiNha":             np.random.choice(loai, n),
+        })
+        base = (df["SoNguoiO"]*120000 + df["SoMayLanh"]*180000
+                + df["SoGioMayLanhMoiNgay"]*15000 + df["SoQuat"]*20000
+                + df["CoTuLanh"]*50000 + np.random.normal(0, 80000, n))
+        df["TienDien_Thang_VND"] = base.clip(200000, 2000000).astype(int)
+
+    le = LabelEncoder()
+    df["LoaiNha_enc"] = le.fit_transform(df["LoaiNha"])
+    FEAT = ["SoNguoiO","SoMayLanh","SoQuat","CoTuLanh",
+            "SoGioMayLanhMoiNgay","DienTichPhong_m2","TangLau","LoaiNha_enc"]
+    X = df[FEAT]; y = df["TienDien_Thang_VND"]
+    Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=.2, random_state=42)
+
+    models = {
+        "Rừng Ngẫu nhiên":    RandomForestRegressor(n_estimators=200, random_state=42),
+        "Gradient Boosting":  GradientBoostingRegressor(n_estimators=200, random_state=42),
+        "Hồi quy Tuyến tính": LinearRegression(),
+    }
+    res = {}
+    for name, m in models.items():
+        m.fit(Xtr, ytr); pred = m.predict(Xte)
+        res[name] = {"model":m, "mae":mean_absolute_error(yte,pred),
+                     "r2":r2_score(yte,pred), "pred":pred, "true":yte.values}
+    best = min(res, key=lambda k: res[k]["mae"])
+    return df, res, best, le, FEAT
+
+
+def tinh_nuoc(so_nguoi, mua):
+    m3 = so_nguoi * (4.5 if "khô" in mua else 3.8)
+    tong = 0.0; con = m3
+    for gh, gd in [(10,5973),(10,7052),(10,8669),(999,15929)]:
+        su = min(con, gh); tong += su*gd; con -= su
+        if con <= 0: break
+    return round(m3, 1), round(tong * 1.10)
+
+
+# ─────────────────────────────────────────────────────────────
+# MAIN
+# ─────────────────────────────────────────────────────────────
+def main():
+    st.markdown("""
+    <div class="app-header">
+        <h1>⚡ Dự Đoán Tiền Điện – Nước Phòng Trọ TP.HCM</h1>
+        <p>Khu vực gần trường Đại học · Bản đồ giá theo quận · Dự đoán bằng Machine Learning</p>
+    </div>""", unsafe_allow_html=True)
+
+    with st.spinner("Đang tải mô hình..."):
+        df, res, best_name, le, FEAT = load_and_train()
+
+    # ── SIDEBAR ───────────────────────────────────────────────
+    with st.sidebar:
+        st.markdown("### 🗺 Khu vực")
+        DS_QUAN = ["-- Tất cả --"] + DANH_SACH_QUAN
+        quan = st.selectbox(
+            "Quận / Khu vực",
+            DS_QUAN,
+            index=DS_QUAN.index("Quận 3"),
+        )
+        t_filter = {k:v for k,v in TRUONG.items()
+                    if quan == "-- Tất cả --" or v["quan"] == quan}
+        DS_TRUONG = list(t_filter.keys())
+        DEFAULT_TRUONG = "UEH – Cơ sở C (17 Phạm Ngọc Thạch, Q.3)"
+        default_idx = DS_TRUONG.index(DEFAULT_TRUONG) if DEFAULT_TRUONG in DS_TRUONG else 0
+        truong = st.selectbox(
+            "Trường Đại học gần nhất",
+            DS_TRUONG,
+            index=default_idx,
+        )
+        info = TRUONG[truong]
+
+        st.markdown(f"""
+        <div class="area-box">
+            <b>📍 {info['quan']}</b><br>
+            💰 Giá TB: {info['gia_tb']}/tháng<br>
+            📈 Hệ số giá khu vực: ×{info['he_so']:.2f}
+        </div>""", unsafe_allow_html=True)
+
+        st.markdown("### 🏠 Thông tin phòng")
+        loai_nha = st.selectbox("Loại nhà",
+            ["PhongTro","ChungCuMini","NhaNguyenCan","KTX"],
+            format_func=lambda x: {
+                "PhongTro":"Phòng trọ","ChungCuMini":"Chung cư mini",
+                "NhaNguyenCan":"Nhà nguyên căn","KTX":"Ký túc xá"}[x])
+        so_nguoi  = st.slider("Số người ở",         1,  6,  2)
+        dien_tich = st.slider("Diện tích (m²)",     10, 50, 25)
+        tang_lau  = st.slider("Tầng lầu",            1,  8,  3)
+
+        st.markdown("### ❄️ Thiết bị")
+        so_may_lanh = st.slider("Số máy lạnh",           0,   2,   1)
+        so_gio_ml   = st.slider("Giờ bật máy lạnh/ngày", 0.0, 14.0, 6.0, step=0.5)
+        so_quat     = st.slider("Số quạt",                1,   5,   2)
+        co_tu_lanh  = st.checkbox("Có tủ lạnh", value=True)
+
+        st.markdown("### 🌦 Mùa")
+        mua = st.radio("Mùa hiện tại", [
+            "Mùa khô (tháng 11 – 4)",
+            "Mùa mưa (tháng 5 – 10)"])
+
+        st.markdown("### 🤖 Mô hình AI")
+        mo_hinh = st.selectbox("Chọn mô hình",
+                                list(res.keys()),
+                                index=list(res.keys()).index(best_name))
+        st.caption(f"✅ Khuyên dùng: **{best_name}**")
+        btn = st.button("⚡ Dự đoán ngay", use_container_width=True)
+
+    # ── TÍNH TOÁN ─────────────────────────────────────────────
+    loai_enc  = le.transform([loai_nha])[0]
+    Xin = pd.DataFrame([[so_nguoi, so_may_lanh, so_quat, int(co_tu_lanh),
+                          so_gio_ml, dien_tich, tang_lau, loai_enc]],
+                        columns=FEAT)
+    hs_mua    = 1.15 if "khô" in mua else 1.0
+    hs_kv     = info["he_so"]
+    pred_raw  = res[mo_hinh]["model"].predict(Xin)[0]
+    pred_dien = pred_raw * hs_mua * hs_kv
+    mae_val   = res[mo_hinh]["mae"]
+    m3n, tien_nuoc = tinh_nuoc(so_nguoi, mua)
+    tong = pred_dien + tien_nuoc
+
+    if btn:
+        with st.spinner("Đang tính..."):
+            time.sleep(0.3)
+
+    # ── KPI ───────────────────────────────────────────────────
+    c1,c2,c3 = st.columns(3)
+    for col,(val,lbl) in zip([c1,c2,c3],[
+        (len(df),              "Mẫu dữ liệu"),
+        (f"{df['TienDien_Thang_VND'].mean()/1000:.0f}k VND", "Tiền điện trung bình"),
+        (f"×{hs_kv:.2f}",             "Hệ số khu vực"),
+    ]):
+        with col:
+            st.markdown(f"""
+            <div class="kpi">
+                <div class="kpi-v">{val}</div>
+                <div class="kpi-l">{lbl}</div>
+            </div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── KẾT QUẢ ──────────────────────────────────────────────
+    st.markdown('<div class="sec">📊 Kết quả dự đoán</div>', unsafe_allow_html=True)
+    cd, cn, ct = st.columns(3)
+
+    with cd:
+        mua_txt = "☀️ +15% mùa khô" if "khô" in mua else "🌧️ Mùa mưa"
+        st.markdown(f"""
+        <div class="res-card">
+            <div class="res-lbl">⚡ Tiền điện / tháng</div>
+            <div class="res-val">{pred_dien/1000:.0f}k</div>
+            <div class="res-sub">VND &nbsp;·&nbsp; {mua_txt}</div>
+            <div class="res-sub">📍 {info['quan']}</div>
+            <div class="res-range">
+                Khoảng: {max(0,pred_dien-mae_val)/1000:.0f}k – {(pred_dien+mae_val)/1000:.0f}k VND
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+    with cn:
+        st.markdown(f"""
+        <div class="res-card nuoc">
+            <div class="res-lbl">💧 Tiền nước / tháng</div>
+            <div class="res-val nuoc">{tien_nuoc/1000:.0f}k</div>
+            <div class="res-sub">VND &nbsp;·&nbsp; 🚿 {m3n} m³</div>
+            <div class="res-sub">Bậc thang EVN + VAT 10%</div>
+            <div class="res-range" style="background:#f0f9ff;color:#0284c7;">
+                {'☀️ Mùa khô – dùng nhiều hơn' if 'khô' in mua else '🌧️ Mùa mưa – ít hơn'}
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+    with ct:
+        st.markdown(f"""
+        <div class="res-card tong">
+            <div class="res-lbl">💰 Tổng điện + nước / tháng</div>
+            <div class="res-val tong">{tong/1000:.0f}k</div>
+            <div class="res-sub">VND</div>
+            <div class="res-sub">⚡ {pred_dien/1000:.0f}k + 💧 {tien_nuoc/1000:.0f}k</div>
+            <div class="res-range" style="background:#faf5ff;color:#7c3aed;">
+                Mô hình: {mo_hinh}
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── TABS ──────────────────────────────────────────────────
+    st.markdown('<div class="sec">📈 Phân tích chi tiết</div>', unsafe_allow_html=True)
+
+    tab1,tab2,tab3,tab4,tab5,tab6 = st.tabs([
+        "🗺️ Bản đồ",
+        "📊 Phân phối",
+        "🗓️ 12 tháng",
+        "🔍 Độ chính xác",
+        "📌 Yếu tố ảnh hưởng",
+        "⚖️ So sánh mô hình",
+    ])
+
+    # ── TAB 1: BẢN ĐỒ ────────────────────────────────────────
+    with tab1:
+        map_df = pd.DataFrame([{
+            "Trường": k, "Quận": v["quan"],
+            "Lat": v["lat"], "Lon": v["lon"],
+            "Hệ số": v["he_so"],
+            "Giá trung bình": v["gia_tb"],
+            "Ước tính (VND)": int(pred_raw * v["he_so"] * hs_mua),
+        } for k,v in TRUONG.items()])
+
+        fig_map = px.scatter_mapbox(
+            map_df, lat="Lat", lon="Lon",
+            color="Hệ số", size="Ước tính (VND)",
+            size_max=18, hover_name="Trường",
+            hover_data={
+                "Quận":True,"Hệ số":True,
+                "Giá trung bình":True,
+                "Ước tính (VND)":":,.0f",
+                "Lat":False,"Lon":False,
+            },
+            color_continuous_scale=["#22c55e","#facc15","#ef4444"],
+            range_color=[0.88, 1.20],
+            mapbox_style="open-street-map",
+            zoom=10.5, center={"lat":10.82,"lon":106.70},
+            height=480,
+        )
+        # Đánh dấu trường đang chọn
+        row = map_df[map_df["Trường"] == truong]
+        if not row.empty:
+            fig_map.add_trace(go.Scattermapbox(
+                lat=row["Lat"], lon=row["Lon"],
+                mode="markers", marker=dict(size=20, color="#1d4ed8"),
+                name="Đang chọn", showlegend=True,
+            ))
+        fig_map.update_layout(
+            margin=dict(l=0,r=0,t=0,b=0),
+            paper_bgcolor="#ffffff",
+            legend=dict(font=dict(size=10), bgcolor="rgba(0,0,0,0)"),
+            coloraxis_colorbar=dict(
+                title="Hệ số", tickformat=".2f",
+                thickness=12, len=0.5,
+            ),
+        )
+        st.plotly_chart(fig_map, use_container_width=True)
+        st.caption("🟢 Xanh = giá thấp  ·  🔴 Đỏ = giá cao  ·  🔵 Xanh dương = khu vực bạn chọn")
+
+        # Bảng đơn giản
+        show = map_df[["Trường","Quận","Hệ số","Giá trung bình","Ước tính (VND)"]].copy()
+        show["Ước tính (VND)"] = show["Ước tính (VND)"].apply(lambda x: f"{x:,.0f}")
+        show["Hệ số"] = show["Hệ số"].apply(lambda x: f"×{x:.2f}")
+        st.dataframe(show.sort_values("Quận"), use_container_width=True, hide_index=True)
+
+    # ── TAB 2: PHÂN PHỐI ─────────────────────────────────────
+    with tab2:
+        ca, cb = st.columns(2)
+
+        with ca:
+            fig1 = px.histogram(
+                df, x="TienDien_Thang_VND", nbins=25,
+                color_discrete_sequence=["#3b82f6"],
+            )
+            fig1.add_vline(x=pred_dien, line_dash="dash",
+                           line_color="#ef4444", line_width=1.5,
+                           annotation_text="Dự đoán",
+                           annotation_font=dict(color="#ef4444", size=10))
+            fig1 = chart_layout(fig1, "Phân phối tiền điện", 320)
+            fig1.update_traces(marker_line_width=0)
+            st.plotly_chart(fig1, use_container_width=True)
+
+        with cb:
+            fig2 = px.box(
+                df, x="LoaiNha", y="TienDien_Thang_VND",
+                color="LoaiNha",
+                color_discrete_sequence=["#3b82f6","#0891b2","#7c3aed","#16a34a"],
+                labels={"LoaiNha":"", "TienDien_Thang_VND":"VND"},
+            )
+            fig2 = chart_layout(fig2, "Tiền điện theo loại nhà", 320)
+            fig2.update_layout(showlegend=False)
+            st.plotly_chart(fig2, use_container_width=True)
+
+        # Scatter đơn giản
+        fig3 = px.scatter(
+            df, x="SoNguoiO", y="TienDien_Thang_VND",
+            color="LoaiNha",
+            color_discrete_sequence=["#3b82f6","#0891b2","#7c3aed","#16a34a"],
+            labels={"SoNguoiO":"Số người ở",
+                    "TienDien_Thang_VND":"VND", "LoaiNha":""},
+            opacity=0.6,
+        )
+        fig3 = chart_layout(fig3, "Số người ở và tiền điện", 320)
+        st.plotly_chart(fig3, use_container_width=True)
+
+    # ── TAB 3: 12 THÁNG ──────────────────────────────────────
+    with tab3:
+        hs12 = {1:1.10,2:1.08,3:1.12,4:1.18,5:1.05,6:1.0,
+                7:0.98,8:0.97,9:0.99,10:1.02,11:1.08,12:1.12}
+        lb12 = ["T1","T2","T3","T4","T5","T6","T7","T8","T9","T10","T11","T12"]
+        d12  = [pred_raw * hs * hs_kv for hs in hs12.values()]
+        n12  = [tinh_nuoc(so_nguoi,
+                    "Mùa mưa (tháng 5 – 10)" if 5<=t<=10
+                    else "Mùa khô (tháng 11 – 4)")[1]
+                for t in range(1, 13)]
+        t12  = [a+b for a,b in zip(d12, n12)]
+
+        fig4 = go.Figure()
+        fig4.add_trace(go.Bar(
+            name="Tiền điện", x=lb12, y=d12,
+            marker_color="#3b82f6", marker_line_width=0,
+        ))
+        fig4.add_trace(go.Bar(
+            name="Tiền nước", x=lb12, y=n12,
+            marker_color="#0891b2", marker_line_width=0,
+        ))
+        fig4.add_trace(go.Scatter(
+            name="Tổng", x=lb12, y=t12,
+            mode="lines+markers",
+            line=dict(color="#7c3aed", width=2),
+            marker=dict(size=5, color="#7c3aed"),
+        ))
+        fig4 = chart_layout(fig4, "Chi phí điện + nước theo tháng", 380)
+        fig4.update_layout(barmode="stack")
+        st.plotly_chart(fig4, use_container_width=True)
+
+        tbl = pd.DataFrame({
+            "Tháng": lb12,
+            "Tiền điện": [f"{v:,.0f}" for v in d12],
+            "Tiền nước": [f"{v:,.0f}" for v in n12],
+            "Tổng cộng": [f"{v:,.0f}" for v in t12],
+        })
+        st.dataframe(tbl, use_container_width=True, hide_index=True)
+
+    # ── TAB 4: ĐỘ CHÍNH XÁC ─────────────────────────────────
+    with tab4:
+        rs = res[mo_hinh]
+        fig5 = go.Figure()
+        fig5.add_trace(go.Scatter(
+            x=rs["true"], y=rs["pred"], mode="markers",
+            marker=dict(color="#3b82f6", size=6, opacity=0.55),
+            name="Điểm dự đoán",
+        ))
+        mn = min(rs["true"].min(), rs["pred"].min())
+        mx = max(rs["true"].max(), rs["pred"].max())
+        fig5.add_trace(go.Scatter(
+            x=[mn,mx], y=[mn,mx], mode="lines",
+            line=dict(color="#ef4444", dash="dash", width=1.5),
+            name="Lý tưởng",
+        ))
+        fig5 = chart_layout(fig5, "Thực tế vs Dự đoán", 400)
+        fig5.update_layout(
+            xaxis_title="Thực tế (VND)",
+            yaxis_title="Dự đoán (VND)",
+        )
+        st.plotly_chart(fig5, use_container_width=True)
+
+        m1, m2 = st.columns(2)
+        m1.metric("Độ chính xác R²", f"{rs['r2']:.3f}",
+                  help="Gần 1.0 = rất chính xác")
+        m2.metric("Sai số trung bình (MAE)", f"{rs['mae']:,.0f} VND")
+
+    # ── TAB 5: FEATURE IMPORTANCE ────────────────────────────
+    with tab5:
+        FEAT_VI = ["Số người ở","Số máy lạnh","Số quạt","Có tủ lạnh",
+                   "Giờ máy lạnh/ngày","Diện tích","Tầng lầu","Loại nhà"]
+
+        if hasattr(res[mo_hinh]["model"], "feature_importances_"):
+            fi   = res[mo_hinh]["model"].feature_importances_
+            fidf = pd.DataFrame({"Yếu tố": FEAT_VI, "Giá trị": fi})
+            fidf = fidf.sort_values("Giá trị", ascending=True)
+
+            fig6 = go.Figure(go.Bar(
+                x=fidf["Giá trị"], y=fidf["Yếu tố"],
+                orientation="h",
+                marker=dict(
+                    color=fidf["Giá trị"],
+                    colorscale=[[0,"#dbeafe"],[1,"#1d4ed8"]],
+                    showscale=False,
+                ),
+            ))
+            fig6 = chart_layout(fig6, "Yếu tố ảnh hưởng đến tiền điện", 360)
+            fig6.update_layout(xaxis_title="Mức độ ảnh hưởng", yaxis_title="")
+            st.plotly_chart(fig6, use_container_width=True)
+            st.info("**Số người ở** và **giờ bật máy lạnh** là 2 yếu tố ảnh hưởng nhiều nhất.")
+        else:
+            coef = res[mo_hinh]["model"].coef_
+            cdf  = pd.DataFrame({"Yếu tố": FEAT_VI, "Hệ số": coef})
+            cdf  = cdf.sort_values("Hệ số", ascending=True)
+            fig6b = go.Figure(go.Bar(
+                x=cdf["Hệ số"], y=cdf["Yếu tố"],
+                orientation="h",
+                marker=dict(
+                    color=cdf["Hệ số"],
+                    colorscale=[[0,"#fca5a5"],[0.5,"#f9fafb"],[1,"#93c5fd"]],
+                    showscale=False,
+                ),
+            ))
+            fig6b = chart_layout(fig6b, "Hệ số hồi quy", 360)
+            st.plotly_chart(fig6b, use_container_width=True)
+
+    # ── TAB 6: SO SÁNH MÔ HÌNH ───────────────────────────────
+    with tab6:
+        mn_list = list(res.keys())
+        maes    = [res[m]["mae"] for m in mn_list]
+        r2s     = [res[m]["r2"]  for m in mn_list]
+        colors  = ["#1d4ed8" if m == mo_hinh else "#93c5fd" for m in mn_list]
+
+        fig7 = make_subplots(rows=1, cols=2,
+            subplot_titles=["Sai số trung bình (thấp = tốt)",
+                            "Độ chính xác R² (cao = tốt)"])
+        fig7.add_trace(go.Bar(x=mn_list, y=maes, marker_color=colors,
+                              marker_line_width=0, showlegend=False), row=1, col=1)
+        fig7.add_trace(go.Bar(x=mn_list, y=r2s,  marker_color=colors,
+                              marker_line_width=0, showlegend=False), row=1, col=2)
+        fig7.update_layout(
+            paper_bgcolor="#ffffff", plot_bgcolor="#ffffff",
+            font=dict(family="Be Vietnam Pro", color="#374151", size=11),
+            height=320, margin=dict(l=10,r=10,t=36,b=10),
+        )
+        fig7.update_xaxes(showgrid=False, linecolor="#e5e7eb",
+                          tickfont=dict(size=9, color="#6b7280"))
+        fig7.update_yaxes(gridcolor="#f3f4f6", linecolor="#e5e7eb")
+        st.plotly_chart(fig7, use_container_width=True)
+
+        cmp = pd.DataFrame({
+            "Mô hình":         mn_list,
+            "Sai số TB (VND)": [f"{v:,.0f}" for v in maes],
+            "R² Score":        [f"{v:.3f}"  for v in r2s],
+            "Đánh giá":        ["🏆 Tốt nhất" if m == best_name
+                                  else "✅ Khá tốt" if res[m]["r2"] > .5
+                                  else "⚠️ Cần cải thiện"
+                                  for m in mn_list],
+        })
+        st.dataframe(cmp, use_container_width=True, hide_index=True)
+        st.success(f"Mô hình khuyên dùng: **{best_name}**")
+
+    # ── GỢI Ý TIẾT KIỆM ──────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown('<div class="sec">💡 Gợi ý tiết kiệm</div>', unsafe_allow_html=True)
+
+    tips, warns = [], []
+    if info["he_so"] >= 1.15:
+        warns.append(f"Khu {info['quan']} có giá điện cao (×{info['he_so']:.2f}). "
+                     "Cân nhắc tìm phòng ở TP. Thủ Đức để tiết kiệm hơn.")
+    if so_gio_ml > 8:
+        tips.append("Đang bật máy lạnh hơn 8 giờ/ngày. "
+                    "Thử giảm xuống 6 giờ, đặt 26–27°C để tiết kiệm đáng kể.")
+    if so_may_lanh >= 2:
+        tips.append("Có 2 máy lạnh trở lên – tắt hẳn máy lạnh ở phòng ít dùng.")
+    if co_tu_lanh:
+        tips.append("Tủ lạnh chạy 24/7 – đặt 3–4°C, tránh mở cửa thường xuyên.")
+    if so_nguoi >= 4:
+        tips.append("Phòng đông người – phân công tắt điện, dùng đèn LED tiết kiệm.")
+    if "khô" in mua:
+        tips.append("Mùa khô dùng điều hòa nhiều – vệ sinh phin máy lạnh 1–2 tháng/lần.")
+    if not tips and not warns:
+        tips.append("Thói quen sử dụng của bạn khá hợp lý, tiếp tục duy trì!")
+
+    cols2 = st.columns(2)
+    for i,(txt,typ) in enumerate([(w,"warn") for w in warns]+[(t,"tip") for t in tips]):
+        with cols2[i%2]:
+            icon = "⚠️" if typ == "warn" else "✅"
+            st.markdown(f'<div class="{typ}">{icon} {txt}</div>',
+                        unsafe_allow_html=True)
+
+    # ── FOOTER ────────────────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="text-align:center;font-size:0.78rem;color:#9ca3af;
+                padding:1rem 0;border-top:1px solid #e5e7eb;">
+        ⚡ Dự Đoán Tiền Điện – Nước Phòng Trọ TP.HCM
+        &nbsp;·&nbsp; 300 mẫu khảo sát sinh viên
+        &nbsp;·&nbsp; Đơn giá nước: bậc thang EVN + VAT 10%
+    </div>""", unsafe_allow_html=True)
+
+
+if __name__ == "__main__":
+    main()
+
+
+Code chạy app:
+                pip install -r requirements.txt
+                !wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
+!chmod +x cloudflared
+                import subprocess, time
+
+proc = subprocess.Popen(
+    ["streamlit", "run", "app_tien_dien.py",
+     "--server.port", "8501",
+     "--server.headless", "true"],
+    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+)
+time.sleep(4)
+
+# Tạo tunnel Cloudflare
+cf = subprocess.Popen(
+    ['./cloudflared', 'tunnel', '--url', 'http://localhost:8501'],
+    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+)
+
+# Tìm link trong output
+import re
+for line in cf.stderr:
+    match = re.search(r'https://[a-z0-9\-]+\.trycloudflare\.com', line)
+    if match:
+        print("=" * 50)
+        print(f"✅ APP ĐANG CHẠY!")
+        print(f"🔗 Link: {match.group()}")
+        print("=" * 50)
+        break
+
+
+                
