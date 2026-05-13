@@ -1,0 +1,334 @@
+
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import Perceptron
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import accuracy_score
+
+
+st.set_page_config(
+    page_title="Dự đoán Tiểu đường",
+    page_icon="🩺",
+    layout="centered",
+)
+
+
+st.markdown("""
+<style>
+    .main { background-color: #f8fafc; }
+    .result-box {
+        padding: 20px 28px;
+        border-radius: 14px;
+        text-align: center;
+        font-size: 22px;
+        font-weight: 700;
+        margin-top: 18px;
+        letter-spacing: 0.5px;
+    }
+    .result-positive {
+        background: #fee2e2;
+        border: 2px solid #ef4444;
+        color: #b91c1c;
+    }
+    .result-negative {
+        background: #dcfce7;
+        border: 2px solid #22c55e;
+        color: #15803d;
+    }
+    .metric-card {
+        background: white;
+        border-radius: 10px;
+        padding: 10px 16px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        text-align: center;
+    }
+    h1 { color: #1e293b; }
+    .stSlider > label { font-weight: 600; }
+</style>
+""", unsafe_allow_html=True)
+
+
+
+@st.cache_resource(show_spinner="Đang huấn luyện Linear Perceptron...")
+def load_and_train():
+    """
+    Pipeline:
+      1. Đọc dữ liệu CSV
+      2. Chuẩn hoá bằng StandardScaler  →  x' = (x - mean) / std
+      3. Train Linear Perceptron (sklearn)
+      4. Bọc bằng CalibratedClassifierCV (sigmoid) để lấy predict_proba
+      5. Trả về: model, scaler, train_acc, test_acc, cv_scores, df_features
+    """
+    df = pd.read_csv("diabetes.csv")
+
+    features = [
+        "Pregnancies", "Glucose", "BloodPressure", "SkinThickness",
+        "Insulin", "BMI", "DiabetesPedigreeFunction", "Age"
+    ]
+    X = df[features].values
+    y = df["Outcome"].values
+
+    
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
+
+    
+    scaler = StandardScaler()
+    X_train_sc = scaler.fit_transform(X_train)
+    X_test_sc  = scaler.transform(X_test)
+
+   
+    base_perceptron = Perceptron(
+        max_iter=1000,
+        tol=1e-3,
+        random_state=42,
+        eta0=1.0,          # learning rate mặc định
+        n_jobs=-1,
+    )
+    base_perceptron.fit(X_train_sc, y_train)
+
+    train_acc = accuracy_score(y_train, base_perceptron.predict(X_train_sc))
+    test_acc  = accuracy_score(y_test,  base_perceptron.predict(X_test_sc))
+
+    
+    cv_scores = cross_val_score(
+        Perceptron(max_iter=1000, tol=1e-3, random_state=42),
+        X_train_sc, y_train, cv=5, scoring="accuracy"
+    )
+
+    
+    calibrated_model = CalibratedClassifierCV(
+        Perceptron(max_iter=1000, tol=1e-3, random_state=42),
+        cv=5, method="sigmoid"
+    )
+    calibrated_model.fit(X_train_sc, y_train)
+
+    return calibrated_model, scaler, train_acc, test_acc, cv_scores, df[features]
+
+
+model, scaler, train_acc, test_acc, cv_scores, df_ref = load_and_train()
+
+
+
+st.title("🩺 Dự đoán nguy cơ Tiểu đường")
+st.markdown(
+    "Điều chỉnh các thông số sức khoẻ bên dưới. "
+    "Mô hình **Linear Perceptron** sẽ dự đoán nguy cơ mắc bệnh tiểu đường **ngay lập tức**."
+)
+
+
+st.markdown("#### 📈 Độ chính xác mô hình (Linear Perceptron)")
+c1, c2, c3, c4 = st.columns(4)
+c1.markdown(
+    f"<div class='metric-card'>🏋️ <b>Train Accuracy</b><br>"
+    f"<span style='font-size:22px;color:#2563eb'>{train_acc*100:.2f}%</span></div>",
+    unsafe_allow_html=True,
+)
+c2.markdown(
+    f"<div class='metric-card'>🧪 <b>Test Accuracy</b><br>"
+    f"<span style='font-size:22px;color:#16a34a'>{test_acc*100:.2f}%</span></div>",
+    unsafe_allow_html=True,
+)
+c3.markdown(
+    f"<div class='metric-card'>🔁 <b>CV Accuracy (5-fold)</b><br>"
+    f"<span style='font-size:22px;color:#d97706'>{cv_scores.mean()*100:.2f}%</span>"
+    f"<span style='font-size:12px;color:#6b7280'> ± {cv_scores.std()*100:.2f}%</span></div>",
+    unsafe_allow_html=True,
+)
+c4.markdown(
+    f"<div class='metric-card'>📊 <b>Tập dữ liệu</b><br>"
+    f"<span style='font-size:22px;color:#7c3aed'>768 mẫu</span>"
+    f"<span style='font-size:12px;color:#6b7280'> (614 train / 154 test)</span></div>",
+    unsafe_allow_html=True,
+)
+
+st.markdown("---")
+
+
+def slider_range(col):
+    """Trả về (min, max, mean) từ dataset gốc."""
+    return (
+        float(df_ref[col].min()),
+        float(df_ref[col].max()),
+        float(df_ref[col].mean()),
+    )
+
+
+
+st.subheader("📋 Nhập thông số bệnh nhân")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    mn, mx, avg = slider_range("Pregnancies")
+    pregnancies = st.slider(
+        "🤰 Pregnancies (Số lần mang thai)",
+        min_value=int(mn), max_value=int(mx),
+        value=int(avg), step=1,
+        help="Số lần người này đã mang thai"
+    )
+
+    mn, mx, avg = slider_range("Glucose")
+    glucose = st.slider(
+        "🍬 Glucose (mg/dL)",
+        min_value=int(mn), max_value=int(mx),
+        value=int(avg), step=1,
+        help="Nồng độ glucose huyết tương (xét nghiệm 2 giờ)"
+    )
+
+    mn, mx, avg = slider_range("BloodPressure")
+    blood_pressure = st.slider(
+        "🩸 Blood Pressure (mmHg)",
+        min_value=int(mn), max_value=int(mx),
+        value=int(avg), step=1,
+        help="Huyết áp tâm trương"
+    )
+
+    mn, mx, avg = slider_range("SkinThickness")
+    skin_thickness = st.slider(
+        "📏 Skin Thickness (mm)",
+        min_value=int(mn), max_value=int(mx),
+        value=int(avg), step=1,
+        help="Độ dày nếp gấp da cơ tam đầu"
+    )
+
+with col2:
+    mn, mx, avg = slider_range("Insulin")
+    insulin = st.slider(
+        "💉 Insulin (μU/mL)",
+        min_value=int(mn), max_value=int(mx),
+        value=int(avg), step=1,
+        help="Nồng độ insulin huyết thanh sau 2 giờ"
+    )
+
+    mn, mx, avg = slider_range("BMI")
+    bmi = st.slider(
+        "⚖️ BMI (kg/m²)",
+        min_value=round(mn, 1), max_value=round(mx, 1),
+        value=round(avg, 1), step=0.1,
+        help="Chỉ số khối cơ thể = cân nặng / chiều cao²"
+    )
+
+    mn, mx, avg = slider_range("DiabetesPedigreeFunction")
+    dpf = st.slider(
+        "🧬 Diabetes Pedigree Function",
+        min_value=round(mn, 3), max_value=round(mx, 3),
+        value=round(avg, 3), step=0.001,
+        format="%.3f",
+        help="Hàm tiền sử di truyền bệnh tiểu đường trong gia đình"
+    )
+
+    mn, mx, avg = slider_range("Age")
+    age = st.slider(
+        "🎂 Age (tuổi)",
+        min_value=int(mn), max_value=int(mx),
+        value=int(avg), step=1,
+        help="Tuổi của bệnh nhân"
+    )
+
+
+
+st.markdown("---")
+
+input_raw = np.array([[pregnancies, glucose, blood_pressure,
+                        skin_thickness, insulin, bmi, dpf, age]])
+
+
+input_scaled = scaler.transform(input_raw)
+
+
+prediction    = model.predict(input_scaled)[0]           # 0 hoặc 1
+proba         = model.predict_proba(input_scaled)[0]     # [P(0), P(1)]
+prob_positive = proba[1] * 100
+
+
+st.subheader("📊 Kết quả dự đoán")
+
+if prediction == 1:
+    st.markdown(
+        f"<div class='result-box result-positive'>"
+        f"⚠️ KẾT QUẢ: <b>1 — CÓ NGUY CƠ TIỂU ĐƯỜNG</b><br>"
+        f"<span style='font-size:16px;font-weight:400'>Xác suất mắc bệnh: {prob_positive:.1f}%</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        f"<div class='result-box result-negative'>"
+        f"✅ KẾT QUẢ: <b>0 — KHÔNG CÓ NGUY CƠ</b><br>"
+        f"<span style='font-size:16px;font-weight:400'>Xác suất mắc bệnh: {prob_positive:.1f}%</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+st.markdown("##### Phân bố xác suất")
+prob_col1, prob_col2 = st.columns(2)
+prob_col1.metric("🟢 Không bệnh (0)", f"{proba[0]*100:.1f}%")
+prob_col2.metric("🔴 Có bệnh   (1)", f"{proba[1]*100:.1f}%")
+st.progress(float(prob_positive / 100))
+
+
+
+with st.expander("🔍 Xem thông số đã nhập & giá trị đã chuẩn hoá (StandardScaler)"):
+    feature_names = [
+        "Pregnancies", "Glucose", "BloodPressure", "SkinThickness",
+        "Insulin", "BMI", "DiabetesPedigreeFunction", "Age"
+    ]
+    table = pd.DataFrame({
+        "Feature"          : feature_names,
+        "Giá trị gốc"      : input_raw[0].tolist(),
+        "Sau StandardScaler": input_scaled[0].round(4).tolist(),
+    })
+    st.dataframe(table, use_container_width=True, hide_index=True)
+    st.caption(
+        "StandardScaler: x_scaled = (x − mean) / std  →  "
+        "đưa mỗi feature về phân phối chuẩn (mean≈0, std≈1)"
+    )
+
+
+
+st.markdown("---")
+st.caption(
+    "⚠️ **Lưu ý:** Đây là công cụ học thuật, "
+    "không thay thế chẩn đoán y tế chuyên nghiệp. "
+    "Mô hình: Linear Perceptron + CalibratedClassifierCV (sigmoid) · "
+    "Chuẩn hoá: StandardScaler · "
+    "Dữ liệu: Pima Indians Diabetes (768 mẫu)"
+)
+
+
+
+
+
+
+Code chạy app:
+!pip install streamlit scikit-learn pandas numpy -q
+!wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
+!chmod +x cloudflared
+import subprocess, threading, time, re
+
+threading.Thread(
+    target=lambda: subprocess.run(["streamlit", "run", "diabetes_app.py", "--server.port=8501"]),
+    daemon=True
+).start()
+
+time.sleep(4)
+
+tunnel = subprocess.Popen(
+    ["./cloudflared", "tunnel", "--url", "http://localhost:8501"],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT
+)
+
+for line in tunnel.stdout:
+    line = line.decode()
+    match = re.search(r'https://[^\s]+\.trycloudflare\.com', line)
+    if match:
+        print("✅ Link:", match.group())
+        break
